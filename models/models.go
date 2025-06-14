@@ -25,6 +25,13 @@ type StudyPlan struct {
 	UpdatedAt   time.Time
 	Subjects    []Subject `gorm:"many2many:study_plan_subjects;"`
 	Career      Career    `gorm:"foreignKey:CareerID"`
+	// Creditos divididos por tipo de materia
+	FundObligatoriaCredits  int       `gorm:"not null;default:0"` // Créditos requeridos de fundamentación obligatoria
+	FundOptativaCredits     int       `gorm:"not null;default:0"` // Créditos requeridos de fundamentación optativa
+	DisObligatoriaCredits   int       `gorm:"not null;default:0"` // Créditos requeridos de disciplinar obligatoria
+	DisOptativaCredits      int       `gorm:"not null;default:0"` // Créditos requeridos de disciplinar optativa
+	LibreCredits            int       `gorm:"not null;default:0"` // Créditos requeridos de libre elección
+	TotalCredits            int       `gorm:"not null;default:0"` // Total de créditos del plan
 }
 
 // Subject representa una materia del plan de estudio
@@ -36,6 +43,7 @@ type Subject struct {
 	Description string    `gorm:"type:text"`
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
+	Type        string    `gorm:"size:20;not null;check:type IN ('fund.obligatoria','fund.optativa','dis.obligatoria','dis.optativa','libre')"` // Tipo de materia
 	// Relaciones
 	Prerequisites []Subject `gorm:"many2many:subject_prerequisites;"`
 	Equivalences  []Equivalence `gorm:"foreignKey:SourceSubjectID"`
@@ -71,6 +79,8 @@ type SubjectInput struct {
 	Grade       float64 `json:"grade" binding:"required"`
 	Status      string  `json:"status" binding:"required"` // Aprobada, Reprobada, En curso, etc.
 	Semester    string  `json:"semester" binding:"required"` // Semestre en que se cursó
+	Type        string  `json:"type" binding:"required"` // Tipo de materia
+	
 }
 
 // ComparisonResult representa el resultado de la comparación de planes
