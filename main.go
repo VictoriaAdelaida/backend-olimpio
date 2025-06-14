@@ -9,6 +9,7 @@ import (
 	"olimpo-vicedecanatura/config"
 	"olimpo-vicedecanatura/database"
 	"olimpo-vicedecanatura/models"
+	"olimpo-vicedecanatura/functions"
 )
 
 func main() {
