@@ -9,27 +9,54 @@ import (
 	"olimpo-vicedecanatura/database"
 )
 
+// TipologiaAsignatura representa los tipos permitidos de asignaturas
+type TipologiaAsignatura string
+
+const (
+	TipologiaDisciplinarOptativa   TipologiaAsignatura = "DISCIPLINAR OPTATIVA"
+	TipologiaFundamentalObligatoria TipologiaAsignatura = "FUND. OBLIGATORIA"
+	TipologiaFundamentalOptativa    TipologiaAsignatura = "FUND. OPTATIVA"
+	TipologiaDisciplinarObligatoria TipologiaAsignatura = "DISCIPLINAR OBLIGATORIA"
+	TipologiaLibreEleccion         TipologiaAsignatura = "LIBRE ELECCIÓN"
+	TipologiaTrabajoGrado          TipologiaAsignatura = "TRABAJO DE GRADO"
+)
+
+// ValidarTipologia verifica si una tipología es válida
+func ValidarTipologia(tipo string) bool {
+	switch TipologiaAsignatura(tipo) {
+	case TipologiaDisciplinarOptativa,
+		 TipologiaFundamentalObligatoria,
+		 TipologiaFundamentalOptativa,
+		 TipologiaDisciplinarObligatoria,
+		 TipologiaLibreEleccion,
+		 TipologiaTrabajoGrado:
+		return true
+	default:
+		return false
+	}
+}
+
 type HistoriaAcademicaRequest struct {
 	Historia string `json:"historia" binding:"required"`
 }
 
 type Asignatura struct {
-	Nombre      string  `json:"nombre"`
-	Codigo      string  `json:"codigo"`
-	Creditos    int     `json:"creditos"`
-	Tipo        string  `json:"tipo"`
-	Periodo     string  `json:"periodo"`
-	Calificacion float64 `json:"calificacion"`
-	Estado      string  `json:"estado"`
+	Nombre      string            `json:"nombre"`
+	Codigo      string            `json:"codigo"`
+	Creditos    int               `json:"creditos"`
+	Tipo        TipologiaAsignatura `json:"tipo"`
+	Periodo     string            `json:"periodo"`
+	Calificacion float64           `json:"calificacion"`
+	Estado      string            `json:"estado"`
 }
 
 type ResumenCreditos struct {
-	Tipologia  string `json:"tipologia"`
-	Exigidos   int    `json:"exigidos"`
-	Aprobados  int    `json:"aprobados"`
-	Pendientes int    `json:"pendientes"`
-	Inscritos  int    `json:"inscritos"`
-	Cursados   int    `json:"cursados"`
+	Tipologia  TipologiaAsignatura `json:"tipologia"`
+	Exigidos   int                 `json:"exigidos"`
+	Aprobados  int                 `json:"aprobados"`
+	Pendientes int                 `json:"pendientes"`
+	Inscritos  int                 `json:"inscritos"`
+	Cursados   int                 `json:"cursados"`
 }
 
 type HistoriaAcademicaResponse struct {
@@ -99,12 +126,12 @@ func main() {
 			PAPA:             4.3,
 			Promedio:         4.3,
 			Asignaturas: []Asignatura{
-				{Nombre: "Desarrollo móvil", Codigo: "3011171", Creditos: 3, Tipo: "DISCIPLINAR OPTATIVA", Periodo: "2024-2S", Calificacion: 4.7, Estado: "APROBADA"},
-				{Nombre: "Desarrollo web I", Codigo: "3011019", Creditos: 3, Tipo: "DISCIPLINAR OPTATIVA", Periodo: "2024-2S", Calificacion: 4.8, Estado: "APROBADA"},
+				{Nombre: "Desarrollo móvil", Codigo: "3011171", Creditos: 3, Tipo: TipologiaDisciplinarOptativa, Periodo: "2024-2S", Calificacion: 4.7, Estado: "APROBADA"},
+				{Nombre: "Desarrollo web I", Codigo: "3011019", Creditos: 3, Tipo: TipologiaDisciplinarOptativa, Periodo: "2024-2S", Calificacion: 4.8, Estado: "APROBADA"},
 			},
 			ResumenCreditos: []ResumenCreditos{
-				{Tipologia: "DISCIPLINAR OPTATIVA", Exigidos: 22, Aprobados: 9, Pendientes: 13, Inscritos: 9, Cursados: 9},
-				{Tipologia: "FUND. OBLIGATORIA", Exigidos: 27, Aprobados: 27, Pendientes: 0, Inscritos: 0, Cursados: 27},
+				{Tipologia: TipologiaDisciplinarOptativa, Exigidos: 22, Aprobados: 9, Pendientes: 13, Inscritos: 9, Cursados: 9},
+				{Tipologia: TipologiaFundamentalObligatoria, Exigidos: 27, Aprobados: 27, Pendientes: 0, Inscritos: 0, Cursados: 27},
 			},
 			PorcentajeAvance: 76.9,
 		}
