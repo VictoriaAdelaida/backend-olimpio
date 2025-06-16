@@ -12,6 +12,66 @@ import (
 	"olimpo-vicedecanatura/functions"
 )
 
+
+type TipologiaAsignatura string
+
+const (
+	TipologiaDisciplinarOptativa   TipologiaAsignatura = "DISCIPLINAR OPTATIVA"
+	TipologiaFundamentalObligatoria TipologiaAsignatura = "FUND. OBLIGATORIA"
+	TipologiaFundamentalOptativa    TipologiaAsignatura = "FUND. OPTATIVA"
+	TipologiaDisciplinarObligatoria TipologiaAsignatura = "DISCIPLINAR OBLIGATORIA"
+	TipologiaLibreEleccion         TipologiaAsignatura = "LIBRE ELECCIÓN"
+	TipologiaTrabajoGrado          TipologiaAsignatura = "TRABAJO DE GRADO"
+)
+
+// ValidarTipologia verifica si una tipología es válida
+func ValidarTipologia(tipo string) bool {
+	switch TipologiaAsignatura(tipo) {
+	case TipologiaDisciplinarOptativa,
+		 TipologiaFundamentalObligatoria,
+		 TipologiaFundamentalOptativa,
+		 TipologiaDisciplinarObligatoria,
+		 TipologiaLibreEleccion,
+		 TipologiaTrabajoGrado:
+		return true
+	default:
+		return false
+	}
+}
+
+type HistoriaAcademicaRequest struct {
+	Historia string `json:"historia" binding:"required"`
+}
+
+type Asignatura struct {
+	Nombre      string            `json:"nombre"`
+	Codigo      string            `json:"codigo"`
+	Creditos    int               `json:"creditos"`
+	Tipo        TipologiaAsignatura `json:"tipo"`
+	Periodo     string            `json:"periodo"`
+	Calificacion float64           `json:"calificacion"`
+	Estado      string            `json:"estado"`
+}
+
+type ResumenCreditos struct {
+	Tipologia  TipologiaAsignatura `json:"tipologia"`
+	Exigidos   int                 `json:"exigidos"`
+	Aprobados  int                 `json:"aprobados"`
+	Pendientes int                 `json:"pendientes"`
+	Inscritos  int                 `json:"inscritos"`
+	Cursados   int                 `json:"cursados"`
+}
+
+type HistoriaAcademicaResponse struct {
+	PlanEstudios      string            `json:"plan_estudios"`
+	Facultad          string            `json:"facultad"`
+	PAPA              float64           `json:"papa"`
+	Promedio          float64           `json:"promedio"`
+	Asignaturas       []Asignatura      `json:"asignaturas"`
+	ResumenCreditos   []ResumenCreditos `json:"resumen_creditos"`
+	PorcentajeAvance  float64           `json:"porcentaje_avance"`
+}
+
 func main() {
 	// Cargar variables de entorno desde .env
 	if err := godotenv.Load(); err != nil {
@@ -70,6 +130,7 @@ func main() {
 		})
 	})
 
+
 	// API Routes
 	api := r.Group("/api")
 	{
@@ -88,6 +149,7 @@ func main() {
 		// Endpoint adicional para comparar por código de carrera (más simple)
 		api.POST("/compare-by-career", compareByCareerCode)
 	}
+
 
 	// Ejecutar servidor
 	log.Println("🚀 Servidor iniciado en http://localhost:8080")
