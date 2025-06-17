@@ -10,6 +10,9 @@ import (
 	"olimpo-vicedecanatura/database"
 	"olimpo-vicedecanatura/models"
 	"olimpo-vicedecanatura/functions"
+	"strings"
+	"errors"
+	"regexp"
 )
 
 
@@ -126,6 +129,8 @@ func main() {
 				"GET /api/careers/:code/study-plans - Obtener planes de estudio de una carrera",
 				"GET /api/study-plans/:id - Obtener detalles de un plan de estudio",
 				"POST /api/compare - Comparar historia académica con plan de estudio",
+				"POST /api/compare-by-career - Comparar por código de carrera",
+				"POST /api/api-compare - Comparar historia académica en texto plano",
 			},
 		})
 	})
@@ -148,6 +153,9 @@ func main() {
 		
 		// Endpoint adicional para comparar por código de carrera (más simple)
 		api.POST("/compare-by-career", compareByCareerCode)
+		
+		// Nuevo endpoint para comparar historia académica en texto plano
+		api.POST("/api-compare", compareAcademicHistoryFromText)
 	}
 
 
@@ -214,8 +222,8 @@ func getStudyPlanDetails(c *gin.Context) {
 	creditsByType := make(map[string]int)
 	
 	for _, subject := range studyPlan.Subjects {
-		subjectsByType[subject.Type] = append(subjectsByType[subject.Type], subject)
-		creditsByType[subject.Type] += subject.Credits
+		subjectsByType[string(subject.Type)] = append(subjectsByType[string(subject.Type)], subject)
+		creditsByType[string(subject.Type)] += subject.Credits
 	}
 	
 	c.JSON(http.StatusOK, gin.H{
@@ -241,7 +249,7 @@ func compareAcademicHistory(c *gin.Context) {
 	}
 	
 	// Realizar la comparación usando la función que creamos
-	result, err := CompareAcademicHistoryWithStudyPlan(config.DB, req.AcademicHistory, req.StudyPlanID)
+	result, err := functions.CompareAcademicHistoryWithStudyPlan(config.DB, req.AcademicHistory, req.StudyPlanID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -276,14 +284,14 @@ func compareByCareerCode(c *gin.Context) {
 	}
 	
 	// Realizar la comparación usando el código de carrera
-	result, err := CompareAcademicHistoryByCareerCode(config.DB, academicHistory)
+	result, err := functions.CompareAcademicHistoryByCareerCode(config.DB, academicHistory)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	
 	// Obtener información del plan de estudio usado
-	studyPlan, _ := GetStudyPlanByCareerCode(config.DB, academicHistory.CareerCode)
+	studyPlan, _ := functions.GetStudyPlanByCareerCode(config.DB, academicHistory.CareerCode)
 	
 	c.JSON(http.StatusOK, gin.H{
 		"comparison_result": result,
@@ -307,4 +315,224 @@ func calculateCompletionPercentage(summary models.CreditsSummary) float64 {
 		return 0.0
 	}
 	return (float64(summary.Total.Completed) / float64(summary.Total.Required)) * 100.0
+}
+
+// APICompareRequest estructura para la solicitud de comparación desde texto
+type APICompareRequest struct {
+	AcademicHistoryText string `json:"academic_history_text" binding:"required"`
+	TargetCareerCode    string `json:"target_career_code" binding:"required"`
+}
+
+// ParsedSubject representa una materia extraída del texto de historia académica
+type ParsedSubject struct {
+	Code        string  `json:"code"`
+	Name        string  `json:"name"`
+	Credits     int     `json:"credits"`
+	Type        string  `json:"type"`
+	Grade       float64 `json:"grade"`
+	Status      string  `json:"status"`
+	Semester    string  `json:"semester"`
+}
+
+// parseAcademicHistoryText extrae las materias de la historia académica en texto
+func parseAcademicHistoryText(text string) ([]ParsedSubject, error) {
+	var subjects []ParsedSubject
+	lines := strings.Split(text, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if strings.Contains(line, "(") && strings.Contains(line, ")") {
+			subject, err := parseSubjectLineUltraTolerant(line)
+			if err == nil {
+				subjects = append(subjects, subject)
+			}
+		}
+	}
+	return subjects, nil
+}
+
+// Versión ultra tolerante del parser de materias
+func parseSubjectLineUltraTolerant(line string) (ParsedSubject, error) {
+	codeStart := strings.Index(line, "(")
+	codeEnd := strings.Index(line, ")")
+	if codeStart == -1 || codeEnd == -1 || codeEnd <= codeStart {
+		return ParsedSubject{}, errors.New("código no encontrado")
+	}
+	code := line[codeStart+1 : codeEnd]
+	name := strings.TrimSpace(line[:codeStart])
+	remaining := strings.TrimSpace(line[codeEnd+1:])
+	parts := strings.Fields(remaining)
+	if len(parts) < 2 {
+		return ParsedSubject{}, errors.New("información insuficiente")
+	}
+	reNum := regexp.MustCompile(`^[0-9]+(\.[0-9]+)?$`)
+	if !reNum.MatchString(parts[0]) {
+		return ParsedSubject{}, errors.New("créditos no es un número válido: " + parts[0])
+	}
+	creditsFloat, _ := strconv.ParseFloat(parts[0], 64)
+	credits := int(creditsFloat)
+	subjectType := determineSubjectType(parts[1:])
+	var grade float64
+	for _, part := range parts {
+		if g, err := strconv.ParseFloat(part, 64); err == nil && g >= 0.0 && g <= 5.0 {
+			grade = g
+			break
+		}
+	}
+	status := "APROBADA"
+	if strings.Contains(strings.ToUpper(line), "REPROBADA") {
+		status = "REPROBADA"
+	} else if strings.Contains(strings.ToUpper(line), "EN CURSO") {
+		status = "EN CURSO"
+	}
+	var semester string
+	for _, part := range parts {
+		if strings.Contains(part, "-") && len(part) >= 6 {
+			semester = part
+			break
+		}
+	}
+	return ParsedSubject{
+		Code:     code,
+		Name:     name,
+		Credits:  credits,
+		Type:     subjectType,
+		Grade:    grade,
+		Status:   status,
+		Semester: semester,
+	}, nil
+}
+
+// determineSubjectType determina el tipo de materia basándose en palabras clave
+func determineSubjectType(parts []string) string {
+	text := strings.Join(parts, " ")
+	text = strings.ToUpper(text)
+	
+	if strings.Contains(text, "FUND. OBLIGATORIA") || strings.Contains(text, "FUNDAMENTACIÓN OBLIGATORIA") {
+		return "FUND. OBLIGATORIA"
+	}
+	if strings.Contains(text, "FUND. OPTATIVA") || strings.Contains(text, "FUNDAMENTACIÓN OPTATIVA") {
+		return "FUND. OPTATIVA"
+	}
+	if strings.Contains(text, "DISCIPLINAR OBLIGATORIA") {
+		return "DISCIPLINAR OBLIGATORIA"
+	}
+	if strings.Contains(text, "DISCIPLINAR OPTATIVA") {
+		return "DISCIPLINAR OPTATIVA"
+	}
+	if strings.Contains(text, "LIBRE ELECCIÓN") {
+		return "LIBRE ELECCIÓN"
+	}
+	if strings.Contains(text, "TRABAJO DE GRADO") {
+		return "TRABAJO DE GRADO"
+	}
+	if strings.Contains(text, "NIVELACIÓN") {
+		return "NIVELACIÓN"
+	}
+	
+	return "LIBRE ELECCIÓN" // Por defecto
+}
+
+// Limpieza y normalización del texto de historia académica
+func preprocessAcademicHistoryText(raw string) string {
+	// 1. Reemplazar saltos de línea de Windows por Unix
+	cleaned := strings.ReplaceAll(raw, "\r\n", "\n")
+	cleaned = strings.ReplaceAll(cleaned, "\r", "\n")
+	// 2. Reemplazar múltiples saltos de línea por uno solo
+	cleaned = regexp.MustCompile(`\n+`).ReplaceAllString(cleaned, "\n")
+	// 3. Quitar espacios en blanco al inicio y final de cada línea
+	lines := strings.Split(cleaned, "\n")
+	for i, line := range lines {
+		lines[i] = strings.TrimSpace(line)
+	}
+	cleaned = strings.Join(lines, "\n")
+	// 4. Quitar espacios en blanco al inicio y final del texto
+	cleaned = strings.TrimSpace(cleaned)
+	return cleaned
+}
+
+// compareAcademicHistoryFromText compara historia académica en texto con el pensum
+func compareAcademicHistoryFromText(c *gin.Context) {
+	var academicHistoryText, targetCareerCode string
+
+	contentType := c.GetHeader("Content-Type")
+	if strings.HasPrefix(contentType, "application/json") {
+		var req APICompareRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Datos de entrada inválidos: " + err.Error()})
+			return
+		}
+		academicHistoryText = req.AcademicHistoryText
+		targetCareerCode = req.TargetCareerCode
+	} else if strings.HasPrefix(contentType, "multipart/form-data") || strings.HasPrefix(contentType, "application/x-www-form-urlencoded") {
+		// Leer desde form-data o x-www-form-urlencoded
+		academicHistoryText = c.PostForm("academic_history_text")
+		targetCareerCode = c.PostForm("target_career_code")
+		if academicHistoryText == "" || targetCareerCode == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Faltan campos en el formulario: academic_history_text y target_career_code son requeridos"})
+			return
+		}
+	} else {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Content-Type no soportado. Usa application/json o form-data."})
+		return
+	}
+
+	// Limpieza y normalización del texto
+	cleanedText := preprocessAcademicHistoryText(academicHistoryText)
+
+	// Parsear la historia académica del texto limpio
+	parsedSubjects, err := parseAcademicHistoryText(cleanedText)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Error parseando historia académica: " + err.Error()})
+		return
+	}
+
+	// Convertir a formato de entrada de la API
+	var subjects []models.SubjectInput
+	for _, ps := range parsedSubjects {
+		subject := models.SubjectInput{
+			Code:     ps.Code,
+			Name:     ps.Name,
+			Credits:  ps.Credits,
+			Type:     models.TipologiaAsignatura(ps.Type),
+			Grade:    ps.Grade,
+			Status:   ps.Status,
+			Semester: ps.Semester,
+		}
+		subjects = append(subjects, subject)
+	}
+
+	academicHistory := models.AcademicHistoryInput{
+		CareerCode: targetCareerCode,
+		Subjects:   subjects,
+	}
+
+	// Realizar la comparación
+	result, err := functions.CompareAcademicHistoryByCareerCode(config.DB, academicHistory)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Obtener información del plan de estudio usado
+	studyPlan, _ := functions.GetStudyPlanByCareerCode(config.DB, targetCareerCode)
+
+	c.JSON(http.StatusOK, gin.H{
+		"parsed_subjects": parsedSubjects,
+		"comparison_result": result,
+		"study_plan_info": gin.H{
+			"id":      studyPlan.ID,
+			"version": studyPlan.Version,
+			"career":  studyPlan.Career.Name,
+		},
+		"summary": gin.H{
+			"total_subjects_parsed":     len(parsedSubjects),
+			"total_subjects_in_plan":    len(result.EquivalentSubjects) + len(result.MissingSubjects),
+			"approved_subjects":         len(result.EquivalentSubjects),
+			"missing_subjects":          len(result.MissingSubjects),
+			"completion_percentage":     calculateCompletionPercentage(result.CreditsSummary),
+		},
+	})
 }

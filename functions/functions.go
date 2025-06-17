@@ -99,7 +99,7 @@ func CompareAcademicHistoryWithStudyPlan(db *gorm.DB, academicHistory models.Aca
 		if isApproved {
 			subjectResult.Status = "APROBADA"
 			equivalentSubjects = append(equivalentSubjects, subjectResult)
-			creditsByType[planSubject.Type] += planSubject.Credits
+			creditsByType[string(planSubject.Type)] += planSubject.Credits
 		} else {
 			subjectResult.Status = "PENDIENTE"
 			missingSubjects = append(missingSubjects, subjectResult)

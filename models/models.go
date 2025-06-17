@@ -56,6 +56,12 @@ type StudyPlan struct {
 	ElectiveCreditsPercentage int `gorm:"not null"`
 	Subjects    []Subject `gorm:"many2many:study_plan_subjects;"`
 	Career      Career    `gorm:"foreignKey:CareerID"`
+	// Nuevos campos para créditos por tipología
+	FundObligatoriaCredits int `gorm:"not null"`
+	FundOptativaCredits    int `gorm:"not null"`
+	DisObligatoriaCredits  int `gorm:"not null"`
+	DisOptativaCredits     int `gorm:"not null"`
+	LibreCredits           int `gorm:"not null"`
 }
 
 // Subject representa una materia del plan de estudio
@@ -115,6 +121,7 @@ type ComparisonResult struct {
 	MissingSubjects    []SubjectResult `json:"missing_subjects"`
 	TotalCredits       int             `json:"total_credits"`
 	MissingCredits     int             `json:"missing_credits"`
+	CreditsSummary     CreditsSummary  `json:"credits_summary"`
 }
 
 // SubjectResult representa una materia en el resultado de la comparación
@@ -131,4 +138,21 @@ type SubjectResult struct {
 type EquivalenceResult struct {
 	Type  string `json:"type"`
 	Notes string `json:"notes"`
+}
+
+// CreditTypeInfo representa el resumen de créditos por tipo
+type CreditTypeInfo struct {
+	Required  int `json:"required"`
+	Completed int `json:"completed"`
+	Missing   int `json:"missing"`
+}
+
+// CreditsSummary representa el resumen de créditos por cada tipología y el total
+type CreditsSummary struct {
+	FundObligatoria   CreditTypeInfo `json:"fund_obligatoria"`
+	FundOptativa      CreditTypeInfo `json:"fund_optativa"`
+	DisObligatoria    CreditTypeInfo `json:"dis_obligatoria"`
+	DisOptativa       CreditTypeInfo `json:"dis_optativa"`
+	Libre             CreditTypeInfo `json:"libre"`
+	Total             CreditTypeInfo `json:"total"`
 }
