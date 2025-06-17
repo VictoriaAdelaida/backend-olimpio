@@ -7,6 +7,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"olimpo-vicedecanatura/config"
 	"olimpo-vicedecanatura/database"
+	"olimpo-vicedecanatura/models"
+	"olimpo-vicedecanatura/services"
 )
 
 type HistoriaAcademicaRequest struct {
@@ -84,31 +86,34 @@ func main() {
 		})
 	})
 
-	// Endpoint para recibir la historia académica
-	r.POST("/api/historia-academica", func(c *gin.Context) {
-		var req HistoriaAcademicaRequest
+	// NUEVO ENDPOINT 
+	r.POST("/api/compare", func(c *gin.Context) {
+		var req struct {
+			StudyPlanID     uint                        `json:"study_plan_id" binding:"required"`
+			AcademicHistory models.AcademicHistoryInput `json:"academic_history" binding:"required"`
+		}
+		
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "El campo 'historia' es requerido"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Datos de entrada inválidos: " + err.Error()})
 			return
 		}
-
-		// Respuesta de ejemplo (mock)
-		resp := HistoriaAcademicaResponse{
-			PlanEstudios:     "INGENIERÍA DE SISTEMAS E INFORMÁTICA",
-			Facultad:         "FACULTAD DE MINAS",
-			PAPA:             4.3,
-			Promedio:         4.3,
-			Asignaturas: []Asignatura{
-				{Nombre: "Desarrollo móvil", Codigo: "3011171", Creditos: 3, Tipo: "DISCIPLINAR OPTATIVA", Periodo: "2024-2S", Calificacion: 4.7, Estado: "APROBADA"},
-				{Nombre: "Desarrollo web I", Codigo: "3011019", Creditos: 3, Tipo: "DISCIPLINAR OPTATIVA", Periodo: "2024-2S", Calificacion: 4.8, Estado: "APROBADA"},
-			},
-			ResumenCreditos: []ResumenCreditos{
-				{Tipologia: "DISCIPLINAR OPTATIVA", Exigidos: 22, Aprobados: 9, Pendientes: 13, Inscritos: 9, Cursados: 9},
-				{Tipologia: "FUND. OBLIGATORIA", Exigidos: 27, Aprobados: 27, Pendientes: 0, Inscritos: 0, Cursados: 27},
-			},
-			PorcentajeAvance: 76.9,
+		
+		// Obtener el plan de estudio
+		var studyPlan models.StudyPlan
+		if err := config.DB.First(&studyPlan, req.StudyPlanID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Plan de estudio no encontrado"})
+			return
 		}
-		c.JSON(http.StatusOK, resp)
+		
+		// USAR LA FUNCIÓN DE COMPARACIÓN REAL
+		result, err := services.CompareStudyPlanWithHistory(config.DB, studyPlan, req.AcademicHistory)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		
+		// Retornar el resultado real
+		c.JSON(http.StatusOK, result)
 	})
 
 	// Ejecuta el servidor en el puerto 8080 (por defecto)
